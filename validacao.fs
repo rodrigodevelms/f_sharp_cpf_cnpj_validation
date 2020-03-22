@@ -2,75 +2,65 @@ namespace // -> COLOQUE SEU NAMESPACE AQUI!
 
 open System
 
-module Utils =
-    let apenasNumeros (documento: string) =
-       documento
-       |> Seq.filter (Char.IsDigit)
-       |> String.Concat
+module Main =
+  let inline charToInt c = int c - int '0'
 
-    let tamanhoValido (documento: string) =
-        match documento.Length with
-        | 11 | 14 -> true
-        | _ -> false
+  let verifyEachNumber (numbers: int []) (number: int): Boolean =
+    [| 0 .. 9 |]
+    |> Array.tryFind (fun n -> numbers = Array.replicate number n)
+    |> Option.isNone
 
-    let semOsDigitosFinais digitos (documento: string) =
-        let documentoSemDigitos = documento.[..digitos]
-        documentoSemDigitos
+  let validateDocument (document: String) =
+    document
+    |> Seq.filter (fun it -> Char.IsNumber it)
+    |> Seq.map charToInt
+    |> Seq.toArray
 
-    let substituindo (substituto: string) ( [<ParamArray>] digitos: 'a array): Map<'a, string> =
-        digitos
-        |> Seq.fold (fun (newMap: Map<'a, string>) numero ->
-            newMap.Add(numero, substituto)) Map.empty
+  let validateCpf (cpf: String): Boolean =
+    let numbers = validateDocument (cpf)
+    if numbers.Length <> 11 then failwith "Error, invalid CPF length"
+    if not (verifyEachNumber numbers 10) then failwith "Error invalid number verification"
 
-    let adicionaDigito (digito: string) (documento: string) =
-        String.Concat(documento, digito)
+    let digitOne =
+      let temp =
+        [| 0 .. 8 |]
+        |> Array.sumBy (fun it -> ((it + 1) * numbers.[it]))
+        |> fun rem -> rem % 11
+      if temp % 11 >= 10 then 0
+      else temp % 11
 
-    let someOsDigitos (de: int) (ate: int) (documento: string): int =
-        let multiplicador = [ for numero in de..ate do yield numero ]
-        let resultado = Seq.initInfinite (fun i -> multiplicador.[i % multiplicador.Length])
-        documento
-        |> Seq.rev
-        |> Seq.zip resultado
-        |> Seq.sumBy (fun (i, c) -> i * int (Char.GetNumericValue c))
+    let digitTwo =
+      let temp =
+        [| 0 .. 8 |]
+        |> Array.sumBy (fun it -> (it * numbers.[it]))
+        |> fun it -> (it + (digitOne * 9))
+      if temp % 11 >= 10 then 0
+      else temp % 11
 
-    let divisao (constante: int) (somenteDigitos: int) =
-        (somenteDigitos % constante)
-        |> (-) constante
+    if (numbers.[9].Equals(digitOne) && numbers.[10].Equals(digitTwo)) then true
+    else false
 
-    let resultado (mapa: Map<int, string>) divisao: string =
-        match mapa.ContainsKey(divisao) with
-        | true -> mapa.[divisao]
-        | false -> divisao.ToString()
+  let validateCnpj (cnpj: String): Boolean =
+    let mutable mutableNumbers = []
+    let mutable numbers = validateDocument (cnpj)
+    if numbers.Length <> 14 then failwith "Error, invalid CNPJ length"
+    if not (verifyEachNumber numbers 14) then failwith "Error, invalid number verification"
 
-module CPF =
-   let tamanhoValido (cpf: string) =
-       cpf
-       |> Utils.apenasNumeros
-       |> Utils.tamanhoValido
+    let digitOne =
+      [| 5; 4; 3; 2; 9; 8; 7; 6; 5; 4; 3; 2 |]
+      |> Array.mapi (fun index it -> (it * numbers.[index]))
+      |> Array.sum
+      |> fun it -> (it % 11) |> (-) 11
 
-   let primeiroNumero (cpf: string) =
-       cpf
-       |> Utils.apenasNumeros
-       |> Utils.semOsDigitosFinais 8
-       |> Utils.someOsDigitos 2 11
-       |> Utils.divisao 11
-       |> Utils.resultado (Utils.substituindo "0" [| 10; 11 |])
+    numbers
+    |> Array.toList
+    |> (fun it -> mutableNumbers <- it @ [ digitOne ])
 
-   let segundNumero (cpf: string) (_primeiroNumero: string) =
-       cpf
-       |> Utils.apenasNumeros
-       |> Utils.semOsDigitosFinais 8
-       |> Utils.adicionaDigito _primeiroNumero
-       |> Utils.someOsDigitos 2 11
-       |> Utils.divisao 11
-       |> Utils.resultado (Utils.substituindo "0" [| 10; 11 |])
+    let digitTwo =
+      [| 6; 5; 4; 3; 2; 9; 8; 7; 6; 5; 4; 3; 2 |]
+      |> Array.mapi (fun index it -> (it * mutableNumbers.[index]))
+      |> Array.sum
+      |> fun it -> (it % 11) |> (-) 11
 
-   let cpfValidoInvalido (_cpf: string) =
-        match (tamanhoValido _cpf) with
-        | false -> false
-        | true -> (primeiroNumero (_cpf) + (segundNumero (_cpf) (primeiroNumero (_cpf)))) .Equals((Utils.apenasNumeros (_cpf)).[9..])
-
-
-module CNPJ =
-    let todo =
-        "todo"
+    if mutableNumbers.[12] = digitOne && mutableNumbers.[13] = digitTwo then true
+    else false
